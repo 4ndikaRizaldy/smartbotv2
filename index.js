@@ -3,8 +3,12 @@ const qrcode = require('qrcode-terminal');
 
 // Inisialisasi client
 const client = new Client({
-    authStrategy: new LocalAuth(), // Simpan session otomatis di folder .wwebjs_auth
-    puppeteer: { headless: true }  // Headless = tidak buka browser GUI
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        executablePath: '/usr/bin/chromium-browser', // path Chrome kamu (atau kosongkan kalau pakai yang sudah ada)
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
 });
 
 // Tampilkan QR di terminal
