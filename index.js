@@ -6,6 +6,51 @@ const {
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
 
+// ================== FUNGSI ==================
+
+async function mentionAll(remoteJid, sock, customMessage) {
+    try {
+        const metadata = await sock.groupMetadata(remoteJid);
+        const participants = metadata.participants;
+
+        let text = `${customMessage}\n\n`;
+        let mentions = [];
+
+        for (let p of participants) {
+            mentions.push(p.id);
+            text += `@${p.id.split('@')[0]} `;
+        }
+
+        await sock.sendMessage(remoteJid, { text, mentions });
+    } catch (err) {
+        console.error(`❌ Gagal mengambil data grup: ${err.message}`);
+        await sock.sendMessage(remoteJid, {
+            text: '⚠️ Gagal mengambil daftar member. Pastikan bot adalah admin grup.'
+        });
+    }
+}
+
+async function setGroupRestriction(remoteJid, sock, close, sender) {
+    try {
+        const metadata = await sock.groupMetadata(remoteJid);
+        const participant = metadata.participants.find(p => p.id === sender);
+
+        if (!participant || !(participant.admin === 'admin' || participant.admin === 'superadmin')) {
+            return await sock.sendMessage(remoteJid, { text: '⚠️ Hanya admin yang bisa menggunakan perintah ini!' });
+        }
+
+        await sock.groupSettingUpdate(remoteJid, close ? 'announcement' : 'not_announcement');
+        await sock.sendMessage(remoteJid, { text: close ? '🔒 Grup ditutup untuk semua member.' : '🔓 Grup dibuka untuk semua member.' });
+    } catch (err) {
+        console.error(`❌ Gagal mengubah pengaturan grup: ${err.message}`);
+        await sock.sendMessage(remoteJid, {
+            text: '⚠️ Gagal mengubah pengaturan grup. Pastikan bot adalah admin.'
+        });
+    }
+}
+
+// ================== MAIN BOT ==================
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
@@ -42,27 +87,43 @@ async function startBot() {
         if (!msg.message || msg.key.fromMe) return;
 
         const from = msg.key.remoteJid;
-        const pesan = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        const sender = msg.key.participant || msg.key.remoteJid;
+        const textMessage =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            '';
 
-        console.log(`[Pesan] ${from} : ${pesan}`);
+        console.log(`[Pesan] ${from} : ${textMessage}`);
 
-        if (pesan.toLowerCase() === '!ping') {
+        // !ping
+        if (textMessage.toLowerCase() === '!ping') {
             await sock.sendMessage(from, { text: 'Pong! 🏓' });
         }
 
-        if (pesan.toLowerCase().startsWith('!tagall')) {
-            const metadata = await sock.groupMetadata(from);
-            const participants = metadata.participants;
-
-            let text = '📢 Tag All:\n\n';
-            let mentions = [];
-
-            for (let p of participants) {
-                mentions.push(p.id);
-                text += `@${p.id.split('@')[0]} `;
+        // !tagall
+        else if (textMessage.toLowerCase().startsWith('!tagall')) {
+            if (!from.endsWith('@g.us')) {
+                return await sock.sendMessage(from, { text: '⚠️ Perintah ini hanya untuk grup!' });
             }
+            const customMessage =
+                textMessage.replace(/!tagall/i, '').trim() || '👥 Mention All';
+            mentionAll(from, sock, customMessage);
+        }
 
-            await sock.sendMessage(from, { text, mentions });
+        // !bukagrup
+        else if (textMessage.toLowerCase() === '!bukagrup') {
+            if (!from.endsWith('@g.us')) {
+                return await sock.sendMessage(from, { text: '⚠️ Perintah ini hanya untuk grup!' });
+            }
+            await setGroupRestriction(from, sock, false, sender);
+        }
+
+        // !tutupgrup
+        else if (textMessage.toLowerCase() === '!tutupgrup') {
+            if (!from.endsWith('@g.us')) {
+                return await sock.sendMessage(from, { text: '⚠️ Perintah ini hanya untuk grup!' });
+            }
+            await setGroupRestriction(from, sock, true, sender);
         }
     });
 }
