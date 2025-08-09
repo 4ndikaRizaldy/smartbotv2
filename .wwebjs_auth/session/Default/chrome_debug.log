@@ -1,0 +1,29 @@
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Feature xr-spatial-tracking's parameters are ignored.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Origin trial controlled feature not enabled: 'attribution-reporting'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'compute-pressure'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Origin trial controlled feature not enabled: 'interest-cohort'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'private-state-token-issuance'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Origin trial controlled feature not enabled: 'shared-storage'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'shared-storage-select-url'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'private-state-token-redemption'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'unload'.", source:  (0)
+[0809/225506.845:INFO:CONSOLE(0)] "Error with Permissions-Policy header: Unrecognized feature: 'window-management'.", source:  (0)
+[0809/225506.846:INFO:CONSOLE(0)] "Document-Policy HTTP header: Unrecognized document policy feature name include-js-call-stacks-in-crash-reports.", source: https://web.whatsapp.com/ (0)
+[0809/225506.873:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.873:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.874:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.874:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.874:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.875:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.875:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.875:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.876:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.876:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225506.979:WARNING:backend_impl.cc(1816)] Destroying invalid entry.
+[0809/225512.267:INFO:CONSOLE(163)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yZ/r/DmrF7Vop2fF.js (163)
+[0809/225606.730:INFO:CONSOLE(163)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yZ/r/DmrF7Vop2fF.js (163)
+[0809/225613.324:INFO:CONSOLE(150)] "Uncaught (in promise) Error: Unexpected null or undefined: missing local addressing mode for group", source: https://static.whatsapp.net/rsrc.php/v4/yW/r/KyZ4jlPXImC.js (150)
+[0809/230022.844:INFO:CONSOLE(163)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yZ/r/DmrF7Vop2fF.js (163)
+[0809/230109.297:INFO:CONSOLE(898)] "Failed to parse video contentType: video/mp4; codecs=avc1.42000a", source: https://static.whatsapp.net/rsrc.php/v4ioqD4/yV/l/en_GB-j/EueqEjLG7bV.js (898)
+[0809/230109.297:INFO:CONSOLE(898)] "Failed to parse video contentType: video/mp4; codecs=hev1.1.6.L93.B0", source: https://static.whatsapp.net/rsrc.php/v4ioqD4/yV/l/en_GB-j/EueqEjLG7bV.js (898)
+[0809/230110.198:INFO:CONSOLE(163)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yZ/r/DmrF7Vop2fF.js (163)
