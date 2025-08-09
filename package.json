@@ -17,5 +17,13 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4ndikaRizaldy/smartbotv2.git"
+  },
+  "bugs": {
+    "url": "https://github.com/4ndikaRizaldy/smartbotv2/issues"
+  },
+  "homepage": "https://github.com/4ndikaRizaldy/smartbotv2#readme",
   "description": ""
 }

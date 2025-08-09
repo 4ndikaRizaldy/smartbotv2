@@ -1,55 +1,70 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason
+} = require('@whiskeysockets/baileys');
+const P = require('pino');
 const qrcode = require('qrcode-terminal');
 
-// Inisialisasi client
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        executablePath: '/usr/bin/chromium-browser', // path Chrome kamu (atau kosongkan kalau pakai yang sudah ada)
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-});
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
-// Tampilkan QR di terminal
-client.on('qr', qr => {
-    qrcode.generate(qr, { small: true });
-    console.log('Scan QR di WhatsApp (Linked Devices)...');
-});
+    const sock = makeWASocket({
+        logger: P({ level: 'silent' }),
+        auth: state,
+        browser: ['SmartBotV2', 'Chrome', '1.0.0']
+    });
 
-// Koneksi sukses
-client.on('ready', () => {
-    console.log('✅ SmartBotV2 sudah online!');
-});
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-// Handler pesan
-client.on('message', async msg => {
-    const chat = await msg.getChat();
-
-    // !ping
-    if (msg.body.toLowerCase() === '!ping') {
-        await msg.reply('Pong! 🏓');
-    }
-
-    // !tagall
-    if (msg.body.toLowerCase().startsWith('!tagall')) {
-        if (!chat.isGroup) {
-            return msg.reply('Perintah ini hanya untuk grup!');
+        if (qr) {
+            qrcode.generate(qr, { small: true });
+            console.log('📲 Scan QR code di WhatsApp (Linked Devices)');
         }
 
-        // Ambil semua member
-        let text = '📢 Tag All:\n\n';
-        let mentions = [];
+        if (connection === 'close') {
+            const shouldReconnect =
+                (lastDisconnect?.error?.output?.statusCode) !== DisconnectReason.loggedOut;
+            console.log('Koneksi terputus, reconnect:', shouldReconnect);
+            if (shouldReconnect) {
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ SmartBotV2 sudah online!');
+        }
+    });
 
-        for (let participant of chat.participants) {
-            const contact = await client.getContactById(participant.id._serialized);
-            mentions.push(contact);
-            text += `@${contact.number} `;
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const from = msg.key.remoteJid;
+        const pesan = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+
+        console.log(`[Pesan] ${from} : ${pesan}`);
+
+        if (pesan.toLowerCase() === '!ping') {
+            await sock.sendMessage(from, { text: 'Pong! 🏓' });
         }
 
-        await chat.sendMessage(text, { mentions });
-    }
-});
+        if (pesan.toLowerCase().startsWith('!tagall')) {
+            const metadata = await sock.groupMetadata(from);
+            const participants = metadata.participants;
 
-// Mulai bot
-client.initialize();
+            let text = '📢 Tag All:\n\n';
+            let mentions = [];
+
+            for (let p of participants) {
+                mentions.push(p.id);
+                text += `@${p.id.split('@')[0]} `;
+            }
+
+            await sock.sendMessage(from, { text, mentions });
+        }
+    });
+}
+
+startBot();
