@@ -9,13 +9,13 @@
     {
       "time": "06:36",
       "action": "close",
-      "done": false,
+      "done": true,
       "requester": "145024016773225@lid"
     },
     {
       "time": "06:37",
       "action": "open",
-      "done": false,
+      "done": true,
       "requester": "145024016773225@lid"
     }
   ]
