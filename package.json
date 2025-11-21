@@ -1,8 +1,12 @@
 {
   "dependencies": {
     "@adiwajshing/baileys": "^3.5.3",
-    "@whiskeysockets/baileys": "^6.7.18",
+    "@whiskeysockets/baileys": "^7.0.0-rc.8",
     "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "googleapis": "^155.0.1",
+    "haversine-distance": "^1.2.4",
     "luxon": "^3.7.1",
     "pino": "^9.8.0",
     "qrcode": "^1.5.4",
