@@ -301,6 +301,13 @@ async function startBot() {
 
       // apakah grup?
       const isGroup = from && from.endsWith && from.endsWith("@g.us");
+      // WAJIB ADA INI
+      const body =
+        msg.message.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.videoMessage?.caption ||
+        "";
 
       // ambil metadata & participants hanya jika grup (bungkus dengan try)
       let metadata = null;
@@ -317,8 +324,7 @@ async function startBot() {
       // AUTO-KICK jika pengirim (message) sendiri masuk blacklist
       if (isGroup) {
         const senderNumber = normNumber(String(sender).split("@")[0]);
-       if (blacklist[from] && blacklist[from][senderNumber]) {
-
+        if (blacklist[from] && blacklist[from][senderNumber]) {
           const botAdmin = await isBotAdmin(from);
           if (botAdmin) {
             try {
@@ -369,9 +375,10 @@ async function startBot() {
         }
 
         const action = args[1].toLowerCase();
-        let number = (typeof num === "string" ? num.split("@")[0] : "")
-              .replace(/\D/g, ""); // ambil angka saja
-
+        let number = (typeof num === "string" ? num.split("@")[0] : "").replace(
+          /\D/g,
+          ""
+        ); // ambil angka saja
 
         // Buat grup ini punya blacklist sendiri
         if (!blacklist[from]) blacklist[from] = {};
@@ -440,6 +447,32 @@ async function startBot() {
         for (const p of participants || [])
           textTag += `@${p.id.split("@")[0]} `;
         await sock.sendMessage(from, { text: textTag, mentions });
+        return;
+      }
+      // =========== HIDETAG (tag tanpa teks terlihat) ===========
+      if (textRaw.startsWith("!hidetag ")) {
+        if (!isGroup)
+          return await sock.sendMessage(from, {
+            text: "⚠️ Hanya bisa di grup.",
+          });
+
+        const adminIds = (participants || [])
+          .filter((p) => p.admin !== null)
+          .map((p) => p.id);
+
+        if (!adminIds.includes(sender))
+          return await sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa memakai perintah ini.",
+          });
+
+        const message = textRaw.slice("!hidetag ".length).trim();
+        const mentions = (participants || []).map((p) => p.id);
+
+        await sock.sendMessage(from, {
+          text: message || " ",
+          mentions,
+        });
+
         return;
       }
 
