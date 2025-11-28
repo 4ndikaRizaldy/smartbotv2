@@ -13,7 +13,6 @@ const fs = require("fs");
 const TIMEZONE = "Asia/Makassar";
 const SCHEDULE_FILE = "./jadwal.json";
 const COMMANDS_FILE = "./commands.json";
-const BLACKLIST_FILE = "./blacklist.json";
 const GOODBYE_FILE = "./goodbye.json";
 const WELCOME_FILE = "./welcome.json";
 
@@ -40,8 +39,9 @@ function saveJsonFile(path, data) {
 let jadwal = loadJsonFile(SCHEDULE_FILE);
 let welcomeData = loadJsonFile(WELCOME_FILE);
 let goodbyeData = loadJsonFile(GOODBYE_FILE);
-let blacklist = {};
 let commandsFileCache = loadJsonFile(COMMANDS_FILE);
+let adminDB = JSON.parse(fs.readFileSync("./admin.json"));
+let botStartTime = Date.now(); // otomatis terset saat file dijalankan
 
 // helper untuk menyimpan
 function simpanJadwal() {
@@ -53,26 +53,15 @@ function saveWelcome() {
 function saveGoodbye() {
   saveJsonFile(GOODBYE_FILE, goodbyeData);
 }
-function saveBlacklist() {
-  saveJsonFile(BLACKLIST_FILE, blacklist);
-}
 function saveCommands() {
   saveJsonFile(COMMANDS_FILE, commandsFileCache);
 }
 function loadCommands() {
   return loadJsonFile(COMMANDS_FILE);
 }
-function loadBlacklist() {
-  if (fs.existsSync("./blacklist.json")) {
-    blacklist = JSON.parse(fs.readFileSync("./blacklist.json"));
-  }
+function saveAdminDB() {
+  fs.writeFileSync("./admin.json", JSON.stringify(adminDB, null, 2));
 }
-
-function saveBlacklist() {
-  fs.writeFileSync("./blacklist.json", JSON.stringify(blacklist, null, 2));
-}
-
-loadBlacklist();
 
 // Helper: extract message text from many message types
 function extractMessage(msg) {
@@ -211,6 +200,7 @@ async function startBot() {
         console.log("🛑 Logged out. Scan QR ulang.");
       }
     } else if (connection === "open") {
+      botStartTime = Date.now();
       console.log("✅ SmartBotV2 sudah online!");
     }
   });
@@ -227,34 +217,16 @@ async function startBot() {
   sock.ev.on("group-participants.update", async (update) => {
     try {
       const { id: jid, participants, action } = update;
-      const botIsAdmin = await isBotAdmin(jid);
 
       if (action === "add") {
         for (let num of participants) {
-          let number = num.split("@")[0];
-
-          // Cek apakah grup punya blacklist
-          if (blacklist[jid] && blacklist[jid][number]) {
-            try {
-              await sock.groupParticipantsUpdate(id, [num], "remove");
-              await sock.sendMessage(id, {
-                text: `⚠️ Anggota dengan nomor *${number}* otomatis dikeluarkan karena masuk blacklist grup ini.`,
-              });
-            } catch (err) {
-              console.log("Gagal kick:", err);
-            }
-          }
-
-          // welcome
+          const number = num.split("@")[0];
           if (welcomeData[jid]) {
-            const message = welcomeData[jid].replace(
-              /@user/g,
-              `@${userNumber}`
-            );
+            const msg = welcomeData[jid].replace(/@user/g, `@${number}`);
             try {
               await sock.sendMessage(jid, {
-                text: message,
-                mentions: [userId],
+                text: msg,
+                mentions: [num],
               });
             } catch (e) {
               console.error("Failed to send welcome:", e);
@@ -263,16 +235,12 @@ async function startBot() {
         }
       } else if (action === "remove") {
         for (const userId of participants) {
-          if (!userId || typeof userId !== "string") continue;
-          const userNumber = userId.split("@")[0];
+          const number = userId.split("@")[0];
           if (goodbyeData[jid]) {
-            const message = goodbyeData[jid].replace(
-              /@user/g,
-              `@${userNumber}`
-            );
+            const msg = goodbyeData[jid].replace(/@user/g, `@${number}`);
             try {
               await sock.sendMessage(jid, {
-                text: message,
+                text: msg,
                 mentions: [userId],
               });
             } catch (e) {
@@ -293,15 +261,18 @@ async function startBot() {
     try {
       const msg = m.messages[0];
       if (!msg || !msg.message || msg.key.fromMe) return;
+      // ---- IGNORE PESAN LAMA ----
+      const msgTime = Number(msg.messageTimestamp) * 1000; // jadikan ms
+      if (msgTime < botStartTime) {
+        return; // <--- jangan proses
+      }
 
       const from = msg.key.remoteJid;
-      const sender = msg.key.participant || msg.key.remoteJid;
-      const textRaw = extractMessage(msg);
-      const text = (textRaw || "").toLowerCase();
+      const isGroup = from.endsWith("@g.us");
+      const sender = isGroup ? msg.key.participant : msg.key.remoteJid;
+      const senderNumber = sender.split("@")[0];
 
-      // apakah grup?
-      const isGroup = from && from.endsWith && from.endsWith("@g.us");
-      // WAJIB ADA INI
+      // ===== TAMBAHKAN DI SINI =====
       const body =
         msg.message.conversation ||
         msg.message?.extendedTextMessage?.text ||
@@ -309,7 +280,11 @@ async function startBot() {
         msg.message?.videoMessage?.caption ||
         "";
 
-      // ambil metadata & participants hanya jika grup (bungkus dengan try)
+      const text = body.trim().toLowerCase();
+      const textRaw = body.trim();
+      // ===== SAMPAI DI SINI =====
+
+      // lanjut metadata grup, command dll...
       let metadata = null;
       let participants = [];
       if (isGroup) {
@@ -318,32 +293,6 @@ async function startBot() {
           participants = metadata.participants || [];
         } catch (e) {
           console.warn("Gagal ambil metadata:", e?.message || e);
-        }
-      }
-
-      // AUTO-KICK jika pengirim (message) sendiri masuk blacklist
-      if (isGroup) {
-        const senderNumber = normNumber(String(sender).split("@")[0]);
-        if (blacklist[from] && blacklist[from][senderNumber]) {
-          const botAdmin = await isBotAdmin(from);
-          if (botAdmin) {
-            try {
-              await sock.groupParticipantsUpdate(from, [sender], "remove");
-              await sock.sendMessage(from, {
-                text: `🚫 Nomor *${senderNumber}* dikeluarkan (blacklist).`,
-              });
-            } catch (e) {
-              console.error("Failed to kick blacklisted sender:", e);
-              await sock.sendMessage(from, {
-                text: "⚠️ Gagal mengeluarkan (periksa hak admin).",
-              });
-            }
-          } else {
-            await sock.sendMessage(from, {
-              text: "⚠️ Bot bukan admin, tidak bisa kick.",
-            });
-          }
-          return;
         }
       }
 
@@ -356,51 +305,109 @@ async function startBot() {
         return;
       }
 
-      // blacklist add/del (admin only)
-      if (textRaw.startsWith("!blacklist ")) {
-        const adminIds = (participants || [])
-          .filter((p) => p.admin !== null)
-          .map((p) => p.id);
-        if (!adminIds.includes(sender)) {
+      // ================= CEK NOMOR ANGGOTA GRUP =================
+      if (textRaw.startsWith("!cekno ")) {
+        if (!isGroup)
           return sock.sendMessage(from, {
-            text: "❌ Hanya admin yang bisa memakai perintah ini.",
+            text: "⚠️ Perintah ini hanya untuk grup.",
+          });
+
+        let num = textRaw.split(" ")[1] || "";
+        let clean = num.replace(/\D/g, ""); // normalisasi nomor
+
+        if (!clean)
+          return sock.sendMessage(from, {
+            text: "⚠️ Format: !cekno 628xxxxxx",
+          });
+
+        // ambil metadata grup
+        let meta;
+        try {
+          meta = await sock.groupMetadata(from);
+        } catch (e) {
+          return sock.sendMessage(from, {
+            text: "⚠️ Gagal mendapatkan data grup.",
           });
         }
 
-        const args = textRaw.split(" ");
-        if (args.length < 3) {
+        // cek apakah nomor ada dalam daftar peserta
+        let found = meta.participants.find((p) => {
+          let jid = p.id;
+          return jid.includes(clean);
+        });
+
+        if (found) {
           return sock.sendMessage(from, {
-            text: "⚠️ Format:\n!blacklist add 628xxxx\n!blacklist del 628xxxx",
+            text: `✅ Nomor *${clean}* ditemukan di grup.\nID: ${found.id}`,
+          });
+        } else {
+          return sock.sendMessage(from, {
+            text: `❌ Nomor *${clean}* TIDAK ditemukan dalam grup.`,
           });
         }
-
-        const action = args[1].toLowerCase();
-        let number = (typeof num === "string" ? num.split("@")[0] : "").replace(
-          /\D/g,
-          ""
-        ); // ambil angka saja
-
-        // Buat grup ini punya blacklist sendiri
-        if (!blacklist[from]) blacklist[from] = {};
-
-        if (action === "add") {
-          blacklist[from][number] = true;
-          saveBlacklist();
-          return sock.sendMessage(from, {
-            text: `✅ Nomor ${number} ditambahkan ke blacklist grup ini.`,
-          });
-        }
-
-        if (action === "del") {
-          delete blacklist[from][number];
-          saveBlacklist();
-          return sock.sendMessage(from, {
-            text: `✅ Nomor ${number} dihapus dari blacklist grup ini.`,
-          });
-        }
-
-        return sock.sendMessage(from, { text: "⚠️ Gunakan add atau del." });
       }
+
+      // =============== ADD ADMIN BOT ==================
+      if (textRaw.startsWith("!addadmin ")) {
+        let senderNum = sender.replace(/\D/g, "");
+
+        if (senderNum !== adminDB.owner)
+          return sock.sendMessage(from, {
+            text: "❌ Hanya OWNER yang boleh menambah admin.",
+          });
+
+        let target = textRaw.split(" ")[1].replace(/\D/g, "");
+
+        if (!target)
+          return sock.sendMessage(from, {
+            text: "⚠️ Format: !addadmin 628xxxx",
+          });
+
+        adminDB.admins[target] = true;
+        saveAdminDB();
+
+        return sock.sendMessage(from, {
+          text: `✅ Nomor *${target}* telah ditambahkan sebagai Admin Bot.`,
+        });
+      }
+
+      // =============== DELETE ADMIN BOT ==================
+      if (textRaw.startsWith("!deladmin ")) {
+        let senderNum = sender.replace(/\D/g, "");
+
+        if (senderNum !== adminDB.owner)
+          return sock.sendMessage(from, {
+            text: "❌ Hanya OWNER yang boleh menghapus admin.",
+          });
+
+        let target = textRaw.split(" ")[1].replace(/\D/g, "");
+
+        if (!adminDB.admins[target])
+          return sock.sendMessage(from, {
+            text: "⚠️ Nomor tersebut bukan admin bot.",
+          });
+
+        delete adminDB.admins[target];
+        saveAdminDB();
+
+        return sock.sendMessage(from, {
+          text: `🗑 Nomor *${target}* telah dihapus dari Admin Bot.`,
+        });
+      }
+
+      // =============== LIST ADMIN BOT ==================
+      if (textRaw === "!listadmin") {
+        let list = Object.keys(adminDB.admins);
+
+        let text = `👑 *OWNER*: ${adminDB.owner}\n\n👥 *ADMIN BOT:*\n`;
+
+        if (list.length === 0) text += "- (Belum ada admin)";
+        else list.forEach((a) => (text += `- ${a}\n`));
+
+        return sock.sendMessage(from, { text });
+      }
+
+      // ================= SET WELCOME / GOODBYE =================
 
       // setwelcome (admin only)
       if (textRaw.startsWith("!setwelcome ")) {
