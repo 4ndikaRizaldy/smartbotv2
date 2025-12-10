@@ -21,6 +21,18 @@ const COMMANDS_FILE = "./commands.json";
 const WELCOME_FILE = "./welcome.json";
 const GOODBYE_FILE = "./goodbye.json";
 const REMINDER_FILE = "./data/reminder.json";
+// ---------------- Blacklist ----------------
+const BLACKLIST_FILE = "./data/blacklist.json";
+let blacklistData = safeReadJson(BLACKLIST_FILE, { numbers: [] });
+
+function saveBlacklist() {
+  safeWriteJson(BLACKLIST_FILE, blacklistData);
+}
+
+function isBlacklisted(number) {
+  const clean = normNumber(number);
+  return blacklistData.numbers.includes(clean);
+}
 
 // ensure data folder
 if (!fs.existsSync("./data")) fs.mkdirSync("./data");
@@ -292,6 +304,22 @@ async function startBot() {
         if (!fullJid) continue;
         const number = String(fullJid).split("@")[0];
 
+        // ================== BLACKLIST CHECK ==================
+        if (isBlacklisted(number)) {
+          try {
+            await sock.groupParticipantsUpdate(groupId, [fullJid], "remove");
+            // hidetag alert
+            const mentionAll = (metadata?.participants || []).map((x) => x.id);
+            await sock.sendMessage(groupId, {
+              text: `🚫 @${number} masuk daftar blacklist dan otomatis dikeluarkan!`,
+              mentions: mentionAll,
+            });
+            console.log(`BLACKLIST KICK: ${number} from ${groupId}`);
+          } catch (err) {
+            console.error("Blacklist kick error:", err);
+          }
+          continue; // skip welcome/goodbye
+        }
         // JOIN-like actions
         if (
           ["add", "invite", "join", "joined", "insert", "create", ""].includes(
@@ -469,6 +497,82 @@ Custom commands (owner/admin bot):
         )}m ${Math.floor(diff.seconds)}s`;
         await sock.sendMessage(from, { text: `⏱ Uptime: ${up}` });
         return;
+      }
+
+      // ================= BLACKLIST COMMANDS (ADMIN ONLY) =================
+      if (textRaw.startsWith("!addblacklist ")) {
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        const isAdmin = await isGroupAdmin(sender, participants);
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa menambahkan blacklist.",
+          });
+
+        const number = normNumber(textRaw.split(" ")[1]);
+        if (!number)
+          return sock.sendMessage(from, {
+            text: "⚠️ Gunakan: !addblacklist 628xxx",
+          });
+        if (blacklistData.numbers.includes(number))
+          return sock.sendMessage(from, {
+            text: `⚠️ Nomor ${number} sudah ada di blacklist.`,
+          });
+
+        blacklistData.numbers.push(number);
+        saveBlacklist();
+        return sock.sendMessage(from, {
+          text: `✅ Nomor ${number} ditambahkan ke blacklist.`,
+        });
+      }
+
+      if (textRaw.startsWith("!delblacklist ")) {
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        const isAdmin = await isGroupAdmin(sender, participants);
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa menghapus blacklist.",
+          });
+
+        const number = normNumber(textRaw.split(" ")[1]);
+        if (!number)
+          return sock.sendMessage(from, {
+            text: "⚠️ Gunakan: !delblacklist 628xxx",
+          });
+        if (!blacklistData.numbers.includes(number))
+          return sock.sendMessage(from, {
+            text: `⚠️ Nomor ${number} tidak ada di blacklist.`,
+          });
+
+        blacklistData.numbers = blacklistData.numbers.filter(
+          (n) => n !== number
+        );
+        saveBlacklist();
+        return sock.sendMessage(from, {
+          text: `🗑 Nomor ${number} dihapus dari blacklist.`,
+        });
+      }
+
+      if (textRaw === "!listblacklist") {
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        const isAdmin = await isGroupAdmin(sender, participants);
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa melihat blacklist.",
+          });
+
+        if (blacklistData.numbers.length === 0)
+          return sock.sendMessage(from, {
+            text: "📭 Daftar blacklist kosong.",
+          });
+
+        let msg = "📋 *Daftar Blacklist:*\n\n";
+        blacklistData.numbers.forEach((n, i) => {
+          msg += `${i + 1}. ${n}\n`;
+        });
+        return sock.sendMessage(from, { text: msg });
       }
 
       // ---------------- Welcome / Goodbye commands ----------------
