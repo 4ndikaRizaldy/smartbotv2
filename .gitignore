@@ -3,3 +3,4 @@
 node_modules/
 sessions/
 auth_info_baileys/
+auth_info_baileys/creds.json
