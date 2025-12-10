@@ -20,6 +20,7 @@ const SCHEDULE_FILE = "./data/schedule.json";
 const COMMANDS_FILE = "./commands.json";
 const WELCOME_FILE = "./welcome.json";
 const GOODBYE_FILE = "./goodbye.json";
+const REMINDER_FILE = "./data/reminder.json";
 
 // ensure data folder
 if (!fs.existsSync("./data")) fs.mkdirSync("./data");
@@ -35,7 +36,9 @@ function safeReadJson(path, fallback = {}) {
     return raw ? JSON.parse(raw) : fallback;
   } catch (e) {
     console.error(`Error reading ${path}:`, e?.message || e);
-    try { fs.writeFileSync(path, JSON.stringify(fallback, null, 2)); } catch {}
+    try {
+      fs.writeFileSync(path, JSON.stringify(fallback, null, 2));
+    } catch {}
     return fallback;
   }
 }
@@ -52,6 +55,7 @@ let scheduleStore = safeReadJson(SCHEDULE_FILE, { groups: {} });
 let welcomeData = safeReadJson(WELCOME_FILE, {});
 let goodbyeData = safeReadJson(GOODBYE_FILE, {});
 let commandsFileCache = safeReadJson(COMMANDS_FILE, {});
+let reminderData = safeReadJson(REMINDER_FILE, {});
 
 // convenience saver
 function saveAllStores() {
@@ -119,17 +123,23 @@ const jobs = { open: {}, close: {} };
 
 function cancelGroupJobs(groupId) {
   if (jobs.open[groupId]) {
-    try { jobs.open[groupId].cancel(); } catch {}
+    try {
+      jobs.open[groupId].cancel();
+    } catch {}
     delete jobs.open[groupId];
   }
   if (jobs.close[groupId]) {
-    try { jobs.close[groupId].cancel(); } catch {}
+    try {
+      jobs.close[groupId].cancel();
+    } catch {}
     delete jobs.close[groupId];
   }
 }
 function toCron(hhmm) {
   if (!hhmm) return null;
-  const [hh, mm] = String(hhmm).split(":").map((s) => s.padStart(2, "0"));
+  const [hh, mm] = String(hhmm)
+    .split(":")
+    .map((s) => s.padStart(2, "0"));
   return `${mm} ${hh} * * *`;
 }
 function registerGroupSchedule(sock, groupId, openTimeStr, closeTimeStr) {
@@ -139,28 +149,56 @@ function registerGroupSchedule(sock, groupId, openTimeStr, closeTimeStr) {
 
   if (openCron) {
     try {
-      const job = schedule.scheduleJob(`open-${groupId}`, openCron, async () => {
-        try {
-          await sock.groupSettingUpdate(groupId, "not_announcement");
-          await sock.sendMessage(groupId, { text: "🔓 Grup dibuka otomatis." });
-          console.log(`[schedule] OPEN executed for ${groupId} at ${DateTime.now().setZone(TIMEZONE).toISO()}`);
-        } catch (err) { console.error("Error executing open job:", err); }
-      });
+      const job = schedule.scheduleJob(
+        `open-${groupId}`,
+        openCron,
+        async () => {
+          try {
+            await sock.groupSettingUpdate(groupId, "not_announcement");
+            await sock.sendMessage(groupId, {
+              text: "🔓 Grup dibuka otomatis.",
+            });
+            console.log(
+              `[schedule] OPEN executed for ${groupId} at ${DateTime.now()
+                .setZone(TIMEZONE)
+                .toISO()}`
+            );
+          } catch (err) {
+            console.error("Error executing open job:", err);
+          }
+        }
+      );
       jobs.open[groupId] = job;
-    } catch (e) { console.error("Failed register open cron:", e); }
+    } catch (e) {
+      console.error("Failed register open cron:", e);
+    }
   }
 
   if (closeCron) {
     try {
-      const job = schedule.scheduleJob(`close-${groupId}`, closeCron, async () => {
-        try {
-          await sock.groupSettingUpdate(groupId, "announcement");
-          await sock.sendMessage(groupId, { text: "🔒 Grup ditutup otomatis." });
-          console.log(`[schedule] CLOSE executed for ${groupId} at ${DateTime.now().setZone(TIMEZONE).toISO()}`);
-        } catch (err) { console.error("Error executing close job:", err); }
-      });
+      const job = schedule.scheduleJob(
+        `close-${groupId}`,
+        closeCron,
+        async () => {
+          try {
+            await sock.groupSettingUpdate(groupId, "announcement");
+            await sock.sendMessage(groupId, {
+              text: "🔒 Grup ditutup otomatis.",
+            });
+            console.log(
+              `[schedule] CLOSE executed for ${groupId} at ${DateTime.now()
+                .setZone(TIMEZONE)
+                .toISO()}`
+            );
+          } catch (err) {
+            console.error("Error executing close job:", err);
+          }
+        }
+      );
       jobs.close[groupId] = job;
-    } catch (e) { console.error("Failed register close cron:", e); }
+    } catch (e) {
+      console.error("Failed register close cron:", e);
+    }
   }
 }
 function registerAllSchedules(sock) {
@@ -255,16 +293,30 @@ async function startBot() {
         const number = String(fullJid).split("@")[0];
 
         // JOIN-like actions
-        if (["add", "invite", "join", "joined", "insert", "create", ""].includes(action)) {
+        if (
+          ["add", "invite", "join", "joined", "insert", "create", ""].includes(
+            action
+          )
+        ) {
           if (welcomeMsg) {
             const txt = String(welcomeMsg).replace(/@user/g, `@${number}`);
             try {
               // mentions need the full whatsapp jid (e.g. 628xx@s.whatsapp.net)
-              await sock.sendMessage(groupId, { text: txt, mentions: [fullJid] });
+              await sock.sendMessage(groupId, {
+                text: txt,
+                mentions: [fullJid],
+              });
               console.log(`WELCOME SENT to ${fullJid} in ${groupId}: ${txt}`);
             } catch (e) {
-              console.error("Failed welcome with mentions (retry without mentions):", e?.message || e);
-              try { await sock.sendMessage(groupId, { text: txt }); } catch (e2) { console.error("Fallback welcome failed:", e2); }
+              console.error(
+                "Failed welcome with mentions (retry without mentions):",
+                e?.message || e
+              );
+              try {
+                await sock.sendMessage(groupId, { text: txt });
+              } catch (e2) {
+                console.error("Fallback welcome failed:", e2);
+              }
             }
           }
         }
@@ -274,11 +326,21 @@ async function startBot() {
           if (goodbyeMsg) {
             const txt = String(goodbyeMsg).replace(/@user/g, `@${number}`);
             try {
-              await sock.sendMessage(groupId, { text: txt, mentions: [fullJid] });
+              await sock.sendMessage(groupId, {
+                text: txt,
+                mentions: [fullJid],
+              });
               console.log(`GOODBYE SENT to ${fullJid} in ${groupId}: ${txt}`);
             } catch (e) {
-              console.error("Failed goodbye with mentions (retry without mentions):", e?.message || e);
-              try { await sock.sendMessage(groupId, { text: txt }); } catch (e2) { console.error("Fallback goodbye failed:", e2); }
+              console.error(
+                "Failed goodbye with mentions (retry without mentions):",
+                e?.message || e
+              );
+              try {
+                await sock.sendMessage(groupId, { text: txt });
+              } catch (e2) {
+                console.error("Fallback goodbye failed:", e2);
+              }
             }
           }
         }
@@ -305,6 +367,38 @@ async function startBot() {
       const bodyRaw = extractMessage(msg) || "";
       const textRaw = bodyRaw.trim();
       const text = textRaw.toLowerCase();
+      // ======================= REMINDER SCHEDULER =========================
+      // Jalankan **sekali saja**, di luar messages.upsert
+      setInterval(async () => {
+        const nowDT = DateTime.now().setZone(TIMEZONE);
+
+        for (const groupId in reminderData) {
+          const list = reminderData[groupId] || [];
+          for (const r of list) {
+            const rDT = DateTime.fromISO(r.datetime).setZone(TIMEZONE);
+            if (rDT <= nowDT) {
+              try {
+                const metadata = await sock.groupMetadata(groupId);
+                const participants = metadata.participants.map((p) => p.id);
+
+                await sock.sendMessage(groupId, {
+                  text: `📢 *REMINDER!*\n\n${r.message}`,
+                  mentions: participants,
+                });
+              } catch (err) {
+                console.log("Reminder error:", err);
+              }
+            }
+          }
+
+          // hapus reminder yang sudah dikirim
+          reminderData[groupId] = list.filter(
+            (r) => DateTime.fromISO(r.datetime).setZone(TIMEZONE) > nowDT
+          );
+        }
+
+        safeWriteJson(REMINDER_FILE, reminderData);
+      }, 60 * 1000); // tiap menit
 
       // group metadata if needed for admin checks/mentions
       let metadata = null;
@@ -365,21 +459,32 @@ Custom commands (owner/admin bot):
 
       if (text === "!uptime") {
         const now = Date.now();
-        const diff = Duration.fromMillis(now - botStartTime).shiftTo("hours", "minutes", "seconds");
-        const up = `${Math.floor(diff.hours)}h ${Math.floor(diff.minutes)}m ${Math.floor(diff.seconds)}s`;
+        const diff = Duration.fromMillis(now - botStartTime).shiftTo(
+          "hours",
+          "minutes",
+          "seconds"
+        );
+        const up = `${Math.floor(diff.hours)}h ${Math.floor(
+          diff.minutes
+        )}m ${Math.floor(diff.seconds)}s`;
         await sock.sendMessage(from, { text: `⏱ Uptime: ${up}` });
         return;
       }
 
       // ---------------- Welcome / Goodbye commands ----------------
       if (textRaw.startsWith("!setwelcome ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
 
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
+        if (!isAdmin)
+          return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
 
         const msgText = textRaw.replace("!setwelcome", "").trim();
-        if (!msgText) return sock.sendMessage(from, { text: "Contoh: !setwelcome Selamat datang @user" });
+        if (!msgText)
+          return sock.sendMessage(from, {
+            text: "Contoh: !setwelcome Selamat datang @user",
+          });
 
         welcomeData[from] = msgText;
         safeWriteJson(WELCOME_FILE, welcomeData);
@@ -389,13 +494,18 @@ Custom commands (owner/admin bot):
       }
 
       if (textRaw.startsWith("!setgoodbye ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
 
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
+        if (!isAdmin)
+          return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
 
         const msgText = textRaw.replace("!setgoodbye", "").trim();
-        if (!msgText) return sock.sendMessage(from, { text: "Contoh: !setgoodbye Selamat jalan @user" });
+        if (!msgText)
+          return sock.sendMessage(from, {
+            text: "Contoh: !setgoodbye Selamat jalan @user",
+          });
 
         goodbyeData[from] = msgText;
         safeWriteJson(GOODBYE_FILE, goodbyeData);
@@ -406,8 +516,11 @@ Custom commands (owner/admin bot):
 
       // ---------------- Tagging / hidetag / add / kick ----------------
       if (text.startsWith("!tagall")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
-        const mentions = (participants || []).map((p) => p.id || p.participant || p);
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        const mentions = (participants || []).map(
+          (p) => p.id || p.participant || p
+        );
         let textTag = "📢 Tag All:\n\n";
         for (const p of mentions) textTag += `@${String(p).split("@")[0]} `;
         await sock.sendMessage(from, { text: textTag, mentions });
@@ -415,55 +528,89 @@ Custom commands (owner/admin bot):
       }
 
       if (textRaw.startsWith("!hidetag ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
+        if (!isAdmin)
+          return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa." });
         const message = textRaw.slice("!hidetag ".length).trim();
-        const mentions = (participants || []).map((p) => p.id || p.participant || p);
+        const mentions = (participants || []).map(
+          (p) => p.id || p.participant || p
+        );
         await sock.sendMessage(from, { text: message || " ", mentions });
         return;
       }
 
       if (textRaw.startsWith("!add ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const args = textRaw.split(/\s+/);
-        if (args.length < 2) return sock.sendMessage(from, { text: "⚠️ Format: !add 6281234567890" });
+        if (args.length < 2)
+          return sock.sendMessage(from, {
+            text: "⚠️ Format: !add 6281234567890",
+          });
         const number = normNumber(args[1]);
-        if (!/^[0-9]+$/.test(number)) return sock.sendMessage(from, { text: "⚠️ Nomor harus angka." });
+        if (!/^[0-9]+$/.test(number))
+          return sock.sendMessage(from, { text: "⚠️ Nomor harus angka." });
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa menambah anggota." });
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa menambah anggota.",
+          });
         const jid = `${number}@s.whatsapp.net`;
         try {
           await sock.groupParticipantsUpdate(from, [jid], "add");
-          await sock.sendMessage(from, { text: `✅ Berhasil menambahkan ${number}` });
+          await sock.sendMessage(from, {
+            text: `✅ Berhasil menambahkan ${number}`,
+          });
         } catch (e) {
           console.error("Error add:", e);
-          await sock.sendMessage(from, { text: `❌ Gagal menambahkan ${number}. Pastikan bot admin & nomor pernah chat bot.` });
+          await sock.sendMessage(from, {
+            text: `❌ Gagal menambahkan ${number}. Pastikan bot admin & nomor pernah chat bot.`,
+          });
         }
         return;
       }
 
       if (textRaw.startsWith("!kick")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin yang bisa mengeluarkan anggota." });
-        const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        if (!mentioned.length) return sock.sendMessage(from, { text: "⚠️ Mention anggota. Contoh: !kick @tag" });
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin yang bisa mengeluarkan anggota.",
+          });
+        const mentioned =
+          msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        if (!mentioned.length)
+          return sock.sendMessage(from, {
+            text: "⚠️ Mention anggota. Contoh: !kick @tag",
+          });
         try {
           await sock.groupParticipantsUpdate(from, mentioned, "remove");
-          await sock.sendMessage(from, { text: `✅ Berhasil mengeluarkan ${mentioned.length} anggota.` });
+          await sock.sendMessage(from, {
+            text: `✅ Berhasil mengeluarkan ${mentioned.length} anggota.`,
+          });
         } catch (e) {
           console.error("Error kick:", e);
-          await sock.sendMessage(from, { text: "❌ Gagal mengeluarkan. Pastikan bot jadi admin." });
+          await sock.sendMessage(from, {
+            text: "❌ Gagal mengeluarkan. Pastikan bot jadi admin.",
+          });
         }
         return;
       }
 
       // ---------------- Manual open / close ----------------
       if (text === "!buka") {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Perintah ini hanya untuk grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, {
+            text: "⚠️ Perintah ini hanya untuk grup.",
+          });
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin grup yang bisa buka grup." });
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin grup yang bisa buka grup.",
+          });
         try {
           await sock.groupSettingUpdate(from, "not_announcement");
           return sock.sendMessage(from, { text: "🔓 Grup dibuka oleh admin." });
@@ -474,12 +621,20 @@ Custom commands (owner/admin bot):
       }
 
       if (text === "!tutup") {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Perintah ini hanya untuk grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, {
+            text: "⚠️ Perintah ini hanya untuk grup.",
+          });
         const isAdmin = await isGroupAdmin(sender, participants);
-        if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Hanya admin grup yang bisa menutup grup." });
+        if (!isAdmin)
+          return sock.sendMessage(from, {
+            text: "⚠️ Hanya admin grup yang bisa menutup grup.",
+          });
         try {
           await sock.groupSettingUpdate(from, "announcement");
-          return sock.sendMessage(from, { text: "🔒 Grup ditutup oleh admin." });
+          return sock.sendMessage(from, {
+            text: "🔒 Grup ditutup oleh admin.",
+          });
         } catch (e) {
           console.error("Failed manual close:", e);
           return sock.sendMessage(from, { text: "❌ Gagal menutup grup." });
@@ -488,71 +643,192 @@ Custom commands (owner/admin bot):
 
       // ---------------- Schedule commands ----------------
       if (textRaw.startsWith("!setopen ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const isAdmin = await isGroupAdmin(sender, participants);
         if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Admin only." });
         const time = textRaw.split(" ")[1];
-        if (!/^\d{1,2}:\d{2}$/.test(time)) return sock.sendMessage(from, { text: "⚠️ Format HH:MM (24 jam)" });
+        if (!/^\d{1,2}:\d{2}$/.test(time))
+          return sock.sendMessage(from, { text: "⚠️ Format HH:MM (24 jam)" });
         if (!scheduleStore.groups[from]) scheduleStore.groups[from] = {};
         scheduleStore.groups[from].open = time;
         safeWriteJson(SCHEDULE_FILE, scheduleStore);
-        registerGroupSchedule(sock, from, time, scheduleStore.groups[from].close);
-        return sock.sendMessage(from, { text: `✅ Jam buka otomatis diset: ${time}` });
+        registerGroupSchedule(
+          sock,
+          from,
+          time,
+          scheduleStore.groups[from].close
+        );
+        return sock.sendMessage(from, {
+          text: `✅ Jam buka otomatis diset: ${time}`,
+        });
       }
 
       if (textRaw.startsWith("!setclose ")) {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const isAdmin = await isGroupAdmin(sender, participants);
         if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Admin only." });
         const time = textRaw.split(" ")[1];
-        if (!/^\d{1,2}:\d{2}$/.test(time)) return sock.sendMessage(from, { text: "⚠️ Format HH:MM (24 jam)" });
+        if (!/^\d{1,2}:\d{2}$/.test(time))
+          return sock.sendMessage(from, { text: "⚠️ Format HH:MM (24 jam)" });
         if (!scheduleStore.groups[from]) scheduleStore.groups[from] = {};
         scheduleStore.groups[from].close = time;
         safeWriteJson(SCHEDULE_FILE, scheduleStore);
-        registerGroupSchedule(sock, from, scheduleStore.groups[from].open, time);
-        return sock.sendMessage(from, { text: `✅ Jam tutup otomatis diset: ${time}` });
+        registerGroupSchedule(
+          sock,
+          from,
+          scheduleStore.groups[from].open,
+          time
+        );
+        return sock.sendMessage(from, {
+          text: `✅ Jam tutup otomatis diset: ${time}`,
+        });
       }
 
       if (text === "!viewschedule") {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const g = scheduleStore.groups[from] || {};
         const open = g.open ? g.open : "❌ belum diset";
         const close = g.close ? g.close : "❌ belum diset";
-        return sock.sendMessage(from, { text: `📅 *Schedule Grup*\n\n🔓 Buka: ${open}\n🔒 Tutup: ${close}` });
+        return sock.sendMessage(from, {
+          text: `📅 *Schedule Grup*\n\n🔓 Buka: ${open}\n🔒 Tutup: ${close}`,
+        });
       }
 
       if (text === "!delschedule") {
-        if (!isGroup) return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
         const isAdmin = await isGroupAdmin(sender, participants);
         if (!isAdmin) return sock.sendMessage(from, { text: "⚠️ Admin only." });
         cancelGroupJobs(from);
         delete scheduleStore.groups[from];
         safeWriteJson(SCHEDULE_FILE, scheduleStore);
-        return sock.sendMessage(from, { text: "🗑 Jadwal auto open/close dihapus." });
+        return sock.sendMessage(from, {
+          text: "🗑 Jadwal auto open/close dihapus.",
+        });
+      }
+      // ======================= SET REMINDER =========================
+      if (textRaw.startsWith("!setreminder")) {
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+
+        const args = textRaw.split(" ");
+        if (args.length < 4)
+          return sock.sendMessage(from, {
+            text: "❌ Format:\n!setreminder YYYY-MM-DD HH:MM pesan",
+          });
+
+        const date = args[1];
+        const time = args[2];
+        const message = args.slice(3).join(" ");
+
+        // parse datetime dengan luxon & timezone
+        const datetimeObj = DateTime.fromFormat(
+          `${date} ${time}`,
+          "yyyy-MM-dd HH:mm",
+          { zone: TIMEZONE }
+        );
+
+        if (!datetimeObj.isValid)
+          return sock.sendMessage(from, {
+            text: "❌ Format tanggal/jam salah!",
+          });
+
+        if (!reminderData[from]) reminderData[from] = [];
+
+        reminderData[from].push({
+          datetime: datetimeObj.toISO(), // simpan ISO string
+          message,
+          createdBy: sender,
+          id: Date.now(),
+        });
+
+        safeWriteJson(REMINDER_FILE, reminderData);
+
+        return sock.sendMessage(from, {
+          text: `⭕ Reminder tersimpan!\n⏰ ${datetimeObj.toFormat(
+            "yyyy-MM-dd HH:mm"
+          )}\n📝 Pesan: ${message}`,
+        });
+      }
+
+      // ======================= LIST REMINDER =========================
+      if (textRaw === "!listreminder") {
+        if (!isGroup)
+          return sock.sendMessage(from, { text: "⚠️ Hanya di grup." });
+
+        const list = reminderData[from] || [];
+        if (list.length === 0)
+          return sock.sendMessage(from, { text: "📭 Tidak ada reminder." });
+
+        let msg = "📋 *Daftar Reminder:*\n\n";
+        list.forEach((r, i) => {
+          const rDT = DateTime.fromISO(r.datetime).setZone(TIMEZONE);
+          msg += `${i + 1}. ⏰ ${rDT.toFormat("yyyy-MM-dd HH:mm")}\n📝 ${
+            r.message
+          }\nID: ${r.id}\n\n`;
+        });
+
+        return sock.sendMessage(from, { text: msg });
+      }
+
+      // ======================= DELETE REMINDER =========================
+      if (textRaw.startsWith("!delreminder")) {
+        const id = textRaw.split(" ")[1];
+        if (!id)
+          return sock.sendMessage(from, {
+            text: "❌ Gunakan: !delreminder <id>",
+          });
+
+        let list = reminderData[from] || [];
+        const newList = list.filter((r) => r.id != id);
+
+        if (newList.length === list.length)
+          return sock.sendMessage(from, { text: "❌ ID tidak ditemukan." });
+
+        reminderData[from] = newList;
+        safeWriteJson(REMINDER_FILE, reminderData);
+
+        return sock.sendMessage(from, { text: "✔ Reminder berhasil dihapus." });
       }
 
       // ---------------- Custom commands ----------------
       if (textRaw.startsWith("!addcmd ")) {
         const parts = textRaw.replace("!addcmd ", "").split("|");
-        if (parts.length < 2) return sock.sendMessage(from, { text: "⚠️ Format: !addcmd trigger|respon" });
+        if (parts.length < 2)
+          return sock.sendMessage(from, {
+            text: "⚠️ Format: !addcmd trigger|respon",
+          });
         const trigger = parts[0].trim().toLowerCase();
         const response = parts[1].trim();
         commandsFileCache[trigger] = response;
         safeWriteJson(COMMANDS_FILE, commandsFileCache);
-        return sock.sendMessage(from, { text: `✅ Command disimpan: ${trigger}` });
+        return sock.sendMessage(from, {
+          text: `✅ Command disimpan: ${trigger}`,
+        });
       }
 
       if (textRaw.startsWith("!delcmd ")) {
         const trigger = textRaw.replace("!delcmd ", "").trim().toLowerCase();
-        if (!commandsFileCache[trigger]) return sock.sendMessage(from, { text: "❌ Command tidak ditemukan." });
+        if (!commandsFileCache[trigger])
+          return sock.sendMessage(from, {
+            text: "❌ Command tidak ditemukan.",
+          });
         delete commandsFileCache[trigger];
         safeWriteJson(COMMANDS_FILE, commandsFileCache);
-        return sock.sendMessage(from, { text: `🗑 Command ${trigger} dihapus.` });
+        return sock.sendMessage(from, {
+          text: `🗑 Command ${trigger} dihapus.`,
+        });
       }
 
       if (text === "!listcmd") {
         const keys = Object.keys(commandsFileCache || {});
-        if (keys.length === 0) return sock.sendMessage(from, { text: "❌ Tidak ada custom command." });
+        if (keys.length === 0)
+          return sock.sendMessage(from, {
+            text: "❌ Tidak ada custom command.",
+          });
         let out = "📚 *Daftar Custom Command*\n\n";
         keys.forEach((k) => (out += `- ${k}\n`));
         return sock.sendMessage(from, { text: out });
@@ -562,12 +838,10 @@ Custom commands (owner/admin bot):
       if (commandsFileCache[text]) {
         return sock.sendMessage(from, { text: commandsFileCache[text] });
       }
-
     } catch (err) {
       console.error("messages.upsert handler error:", err);
     }
   });
-
 } // end startBot
 
 startBot().catch((e) => {
