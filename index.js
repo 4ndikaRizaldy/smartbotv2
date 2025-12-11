@@ -448,33 +448,44 @@ async function startBot() {
       // ---------- Basic commands ----------
       if (text === "!help" || text === "!menu") {
         const helpText = `🤖 SmartBotV2 - Menu
-Perintah umum:
-- !ping
-- !uptime
-- !help / !menu
 
-Group (admin group):
-- !setwelcome <text>
-- !setgoodbye <text>
-- !tagall
-- !hidetag <text>
-- !add 628xxx
-- !kick @tag
+Perintah Dasar
+- !help / !menu: Daftar perintah
+- !ping: Cek bot
+- !uptime: Lama bot online
 
-Jadwal auto open/close (admin grup):
-- !setopen HH:MM
-- !setclose HH:MM
-- !viewschedule
-- !delschedule
+Blacklist (Admin Grup)
+- !addblacklist 628xxx: Tambah nomor blacklist
+- !delblacklist 628xxx: Hapus dari blacklist
+- !listblacklist: Lihat daftar blacklist
 
-Manual:
-- !buka
-- !tutup
+Welcome / Goodbye (Admin Grup)
+- !setwelcome <text>: Pesan selamat datang (@user)
+- !setgoodbye <text>: Pesan perpisahan
 
-Custom commands (owner/admin bot):
-- !addcmd trigger|response
-- !delcmd trigger
-- !listcmd
+Tagging / Admin Tools
+- !tagall: Mention semua
+- !hidetag <text>: Kirim pesan sembunyi-mention
+- !add 628xxx: Tambah anggota
+- !kick @tag: Keluarkan anggota
+
+Jadwal Auto Open/Close Grup (Admin)
+- !setopen HH:MM: Jam buka otomatis
+- !setclose HH:MM: Jam tutup otomatis
+- !viewschedule: Lihat jadwal
+- !delschedule: Hapus jadwal
+- !buka / !tutup: Manual buka/tutup grup
+
+Reminder / Pengingat
+- !setreminder YYYY-MM-DD HH:MM pesan: Set reminder
+- !listreminder: Lihat reminder
+- !delreminder <id>: Hapus reminder
+
+Custom Command
+- !addcmd trigger|respon: Tambah command
+- !delcmd trigger: Hapus command
+- !listcmd: Lihat command
+
 `;
         await sock.sendMessage(from, { text: helpText });
         return;
